@@ -1,18 +1,24 @@
-package net.specialattack.forge.core.client;
+package net.specialattack.forge.core.client.gui;
 
+import cpw.mods.fml.common.ObfuscationReflectionHelper;
 import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
 import java.util.ArrayList;
 import java.util.List;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.FontRenderer;
+import net.minecraft.client.renderer.OpenGlHelper;
 import net.minecraft.client.renderer.Tessellator;
 import net.minecraft.client.renderer.texture.TextureMap;
 import net.minecraft.util.IIcon;
 import net.minecraft.util.StatCollector;
+import net.minecraft.util.Timer;
 import net.minecraftforge.fluids.Fluid;
 import net.minecraftforge.fluids.FluidStack;
 import net.minecraftforge.fluids.IFluidTank;
 import net.specialattack.forge.core.Assets;
+import net.specialattack.forge.core.client.MC;
+import net.specialattack.forge.core.client.RenderHelper;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL12;
 
@@ -25,6 +31,10 @@ import org.lwjgl.opengl.GL12;
 public final class GuiHelper {
 
     private static final ArrayList<String> reusableArrayList = new ArrayList<String>();
+    private static Timer minecraftTimer;
+
+    private GuiHelper() {
+    }
 
     /**
      * Draws a fluid tank
@@ -40,7 +50,7 @@ public final class GuiHelper {
      * @param height
      *         The height of the tank to render
      */
-    public static void drawFluid(Fluid fluid, int left, int top, int width, int height) {
+    public static void drawFluid(Fluid fluid, int left, int top, int width, int height, float zLevel) {
         if (fluid.getSpriteNumber() == 0) {
             MC.getRenderEngine().bindTexture(TextureMap.locationBlocksTexture);
         } else {
@@ -65,7 +75,7 @@ public final class GuiHelper {
                 float maxU = icon.getMaxU();
                 float maxV = icon.getMaxV();
 
-                GuiHelper.drawTexturedModalRect(left + x, top + height - y - drawHeight, drawWidth, drawHeight, 0.0F, minU, minV, maxU, maxV);
+                GuiHelper.drawTexturedModalRect(left + x, top + height - y - drawHeight, drawWidth, drawHeight, zLevel, minU, minV, maxU, maxV);
             }
         }
     }
@@ -211,36 +221,41 @@ public final class GuiHelper {
      *         The ending x position
      * @param endY
      *         The ending y position
-     * @param color1
-     *         The first colour
-     * @param color2
-     *         The last colour
+     * @param startColor
+     *         The top colour
+     * @param endColor
+     *         The bottom colour
      * @param zLevel
      *         The z-level for rendering
      */
-    public static void drawGradientRect(int startX, int startY, int endX, int endY, int color1, int color2, float zLevel) {
-        float alpha1 = (color1 >> 24 & 255) / 255.0F;
-        float red1 = (color1 >> 16 & 255) / 255.0F;
-        float green1 = (color1 >> 8 & 255) / 255.0F;
-        float blue1 = (color1 & 255) / 255.0F;
-        float alpha2 = (color2 >> 24 & 255) / 255.0F;
-        float red2 = (color2 >> 16 & 255) / 255.0F;
-        float green2 = (color2 >> 8 & 255) / 255.0F;
-        float blue2 = (color2 & 255) / 255.0F;
+    public static void drawGradientRect(int startX, int startY, int endX, int endY, int startColor, int endColor, float zLevel) {
+        drawGradientRect(startX, startY, endX, endY, startColor, endColor, zLevel, false);
+    }
+
+    public static void drawGradientRect(int startX, int startY, int endX, int endY, int startColor, int endColor, float zLevel, boolean antiAlias) {
+        float startAlpha = (float) (startColor >> 24 & 255) / 255.0F;
+        float startRed = (float) (startColor >> 16 & 255) / 255.0F;
+        float startGreen = (float) (startColor >> 8 & 255) / 255.0F;
+        float startBlue = (float) (startColor & 255) / 255.0F;
+        float endAlpha = (float) (endColor >> 24 & 255) / 255.0F;
+        float endRed = (float) (endColor >> 16 & 255) / 255.0F;
+        float endGreen = (float) (endColor >> 8 & 255) / 255.0F;
+        float endBlue = (float) (endColor & 255) / 255.0F;
         GL11.glDisable(GL11.GL_TEXTURE_2D);
         GL11.glEnable(GL11.GL_BLEND);
         GL11.glDisable(GL11.GL_ALPHA_TEST);
-        GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+        if (!antiAlias) {
+            OpenGlHelper.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA, GL11.GL_ONE, GL11.GL_ZERO);
+        }
         GL11.glShadeModel(GL11.GL_SMOOTH);
-        Tessellator tes = Tessellator.instance;
-        tes.startDrawingQuads();
-        tes.setColorRGBA_F(red1, green1, blue1, alpha1);
-        tes.addVertex(endX, startY, zLevel);
-        tes.addVertex(startX, startY, zLevel);
-        tes.setColorRGBA_F(red2, green2, blue2, alpha2);
-        tes.addVertex(startX, endY, zLevel);
-        tes.addVertex(endX, endY, zLevel);
-        tes.draw();
+        GL11.glColor4f(startRed, startGreen, startBlue, startAlpha);
+        GL11.glBegin(GL11.GL_QUADS);
+        GL11.glVertex3f(endX, startY, zLevel);
+        GL11.glVertex3f(startX, startY, zLevel);
+        GL11.glColor4f(endRed, endGreen, endBlue, endAlpha);
+        GL11.glVertex3f(startX, endY, zLevel);
+        GL11.glVertex3f(endX, endY, zLevel);
+        GL11.glEnd();
         GL11.glShadeModel(GL11.GL_FLAT);
         GL11.glDisable(GL11.GL_BLEND);
         GL11.glEnable(GL11.GL_ALPHA_TEST);
@@ -288,6 +303,13 @@ public final class GuiHelper {
         tessellator.addVertexWithUV(startX + width, startY, 0.0D, (u + width) * f, v * f1);
         tessellator.addVertexWithUV(startX, startY, 0.0D, u * f, v * f1);
         tessellator.draw();
+    }
+
+    public static Timer getMinecraftTimer() {
+        if (GuiHelper.minecraftTimer == null) {
+            GuiHelper.minecraftTimer = ObfuscationReflectionHelper.getPrivateValue(Minecraft.class, Minecraft.getMinecraft(), "timer", "field_71428_T");
+        }
+        return GuiHelper.minecraftTimer;
     }
 
 }
